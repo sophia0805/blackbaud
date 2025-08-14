@@ -27,3 +27,6 @@ email=""
 ```bash
 python3 blackbaud.py
 ```
+
+## demonstration  
+![video](https://hc-cdn.hel1.your-objectstorage.com/s/v3/99d238d4426d954a2d3de64f52761e7d139192e3_blackbaud_script.mp4)
