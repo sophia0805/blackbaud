@@ -1,89 +1,119 @@
 import subprocess
-import shlex
 
 def login_to_fsa(username):
     """
-    Opens the FSA login page and types the username. This version uses the most
-    robust method to avoid AppleScript's "-1728" error by activating tabs directly
-    instead of relying on their index number.
+    Windows-only version that uses PowerShell to automate Chrome login.
+    Opens the FSA login page and automatically fills the username field.
     """
-    login_url = "https://fultonscienceacademy.myschoolapp.com/app/student?svcid=edu#login"
+    login_url = "https://fultonscienceacademy.myschoolapp.com/app?svcid=edu#login"
     
-    # This AppleScript avoids asking for the tab's index, which was the source of the error.
-    applescript_command = f"""
-    tell application "Google Chrome"
-	-- Set variables to hold our findings
-	set targetURL to "myschoolapp.com"
-	set foundTab to missing value
-	set foundWindow to missing value
-	
-	-- Safely loop through windows and tabs to find our target
-	repeat with w in windows
-		try
-			-- This 'try' block gracefully skips special windows that cause errors
-			repeat with t in tabs of w
-				if URL of t contains targetURL then
-					set foundTab to t
-					set foundWindow to w
-					exit repeat
-				end if
-			end repeat
-		end try
-		if foundTab is not missing value then exit repeat
-	end repeat
-	
-	-- After searching, decide what to do
-	if foundTab is missing value then
-		-- The tab was not found, so we need to create it.
-		-- First, check if any windows exist at all.
-		if not (exists window 1) then
-			-- If no windows exist, activate Chrome to create one, then open the URL.
-			activate
-			delay 0.5 -- Give it a moment to open a window
-			open location "{login_url}"
-		else
-			-- If a window exists, create the new tab in the frontmost window.
-			make new tab at end of tabs of window 1 with properties {{URL:"{login_url}"}}
-		end if
-	else
-		-- The tab was found. Now we activate it directly.
-		set index of foundWindow to 1
-		set active tab of foundWindow to foundTab
-	end if
-	
-	-- Ensure Chrome is the front application
-	activate
-	
-	-- Give the page a moment to load
-	delay 2.5
-	
-	-- Execute JavaScript in the active tab of the front window
-	tell active tab of window 1
-		execute javascript "document.getElementById('Username').value = '{username}';"
-		execute javascript "document.getElementById('Password').focus();"
-	end tell
-	
-	return "success"
-    end tell
-    """
+    # PowerShell script to automate Chrome with JavaScript injection
+    powershell_script = f'''
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+    
+    # Function to find and focus Chrome window with myschoolapp.com
+    function Find-AndFocus-ChromeTab {{
+        try {{
+            $chrome = Get-Process chrome -ErrorAction SilentlyContinue
+            if ($chrome) {{
+                $shell = New-Object -ComObject Shell.Application
+                $windows = $shell.Windows()
+                
+                foreach ($window in $windows) {{
+                    try {{
+                        if ($window.LocationURL -and $window.LocationURL.Contains("myschoolapp.com")) {{
+                            # Activate the window and bring it to front
+                            $window.Visible = $true
+                            $window.Activate()
+                            return $true
+                        }}
+                    }} catch {{}}
+                }}
+            }}
+            return $false
+        }} catch {{
+            return $false
+        }}
+    }}
+    
+    # Try to find and focus existing tab first
+    $found = Find-AndFocus-ChromeTab
+    
+    if (-not $found) {{
+        # Open new Chrome window with the URL
+        Start-Process "chrome" -ArgumentList "{login_url}"
+        Start-Sleep -Seconds 4
+    }}
+    
+    # Wait for page to load and ensure Chrome is focused
+    Start-Sleep -Seconds 3
+    
+    # Activate Chrome using Shell
+    $shell = New-Object -ComObject Shell.Application
+    $shell.Windows() | Where-Object {{ $_.LocationURL -and $_.LocationURL.Contains("myschoolapp.com") }} | ForEach-Object {{ $_.Activate() }}
+    
+    Start-Sleep -Seconds 2
+    
+    Write-Host "Chrome is now focused. Attempting to automatically fill the username field..."
+    
+    # Use JavaScript injection to fill the username field
+    $javascript = "document.getElementById('Username').value = '{username}'; document.getElementById('Username').focus();"
+    
+    # Try to execute JavaScript through the Shell object
+    try {{
+        $shell.Windows() | Where-Object {{ $_.LocationURL -and $_.LocationURL.Contains("myschoolapp.com") }} | ForEach-Object {{
+            try {{
+                $_.ExecScript($javascript, "JavaScript")
+                Write-Host "Username field filled successfully using JavaScript!"
+            }} catch {{
+                Write-Host "JavaScript injection failed, trying alternative method..."
+                # Alternative: Use SendKeys as fallback
+                Start-Sleep -Seconds 1
+                [System.Windows.Forms.SendKeys]::SendWait("^a")  # Select all
+                Start-Sleep -Milliseconds 200
+                [System.Windows.Forms.SendKeys]::SendWait("{username}")
+                Write-Host "Username entered using SendKeys fallback method."
+            }}
+        }}
+    }} catch {{
+        Write-Host "Shell JavaScript execution failed, using SendKeys method..."
+        Start-Sleep -Seconds 1
+        [System.Windows.Forms.SendKeys]::SendWait("^a")  # Select all
+        Start-Sleep -Milliseconds 200
+        [System.Windows.Forms.SendKeys]::SendWait("{username}")
+        Write-Host "Username entered using SendKeys method."
+    }}
+    
+    Start-Sleep -Seconds 1
+    
+    # Focus password field
+    [System.Windows.Forms.SendKeys]::SendWait("{{TAB}}")
+    
+    Write-Host "Password field focused. Please enter your password manually."
+    Write-Host "success"
+    '''
     
     try:
+        # Run PowerShell script
         process = subprocess.run(
-            ['osascript', '-e', applescript_command],
-            capture_output=True, text=True, check=True, timeout=15
+            ['powershell', '-Command', powershell_script],
+            capture_output=True, text=True, timeout=30
         )
         
         result = process.stdout.strip()
-        if result == "success":
+        if "success" in result:
             return True
         else:
-            # This case should ideally not be reached with the new logic
-            print(f"The script finished but did not report success. Result: {result}")
+            print(f"PowerShell script output: {result}")
             return False
             
     except subprocess.CalledProcessError as e:
-        print("An error occurred executing the AppleScript.")
+        print("An error occurred executing the PowerShell script.")
         print(f"Error Details: {e.stderr}")
+        return False
+    except subprocess.TimeoutExpired:
+        print("PowerShell script timed out.")
         return False
 
 # --- MAIN PART OF THE SCRIPT ---
