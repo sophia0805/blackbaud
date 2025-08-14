@@ -9,7 +9,6 @@ def login_to_fsa_windows(username):
     """
     login_url = "https://fultonscienceacademy.myschoolapp.com/app/student?svcid=edu#login"
     
-    # PowerShell script to automate Chrome
     powershell_script = f'''
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
